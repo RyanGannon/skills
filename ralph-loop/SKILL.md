@@ -27,7 +27,7 @@ Score against the five pillars (see [ASSESSMENT.md](ASSESSMENT.md)):
 2. **CLAUDE.md** — Build/test commands, project conventions, accumulated signs
 3. **ralph/ scripts** — `afk.sh`, `once.sh`, and `prompt.md` present and correctly structured
 4. **Backpressure** — Automated tests, linters, type checkers wired into `ralph/prompt.md`
-5. **Implementation Plan** — `IMPLEMENTATION_PLAN.md` referencing GitHub issue numbers
+5. **Implementation Plan** — A prioritised task list via GitHub Issues, Jira, or `IMPLEMENTATION_PLAN.md`
 
 Present a summary table:
 
@@ -38,7 +38,7 @@ Specifications          ✓ / ✗    PRD issue + N impl. tickets found / missing
 CLAUDE.md               ✓ / ✗    Present with build+test commands / missing
 ralph/ scripts          ✓ / ✗    afk.sh + once.sh + prompt.md present / missing
 Backpressure            ✓ / ✗    [commands in prompt.md] / no checks wired in
-Implementation Plan     ✓ / ✗    Present / not yet generated
+Implementation Plan     ✓ / ✗    [tracker type] set up / not yet configured
 ```
 
 ### Step 2 — Guide through gaps, in order
@@ -47,12 +47,17 @@ Work through missing pillars in this exact sequence. Never skip ahead.
 
 #### 2a. Specifications (if missing or thin)
 
-Specs live as GitHub issues, not files in the repo.
+Specs live as issues in the user's task tracker, not as files in the repo. The workflow differs by tracker:
 
+**If using GitHub Issues:**
 1. **Create the PRD** — Use the `write-a-prd` skill. It interviews the user, explores the codebase, and submits a structured PRD as a GitHub issue.
 2. **Break it into tickets** — Use the `prd-to-issues` skill. It slices the PRD into independently-grabbable AFK vertical slices, each created as its own GitHub issue with acceptance criteria and blocked-by links.
 
-These issues are the source of truth. The implementation plan and `afk.sh` arguments reference them by number.
+**If using Jira:**
+1. **Create the PRD** — Use the `write-a-prd` skill to draft the PRD content, then use the `acli-jira` skill to create it as a Jira Epic with the full PRD body.
+2. **Break it into tickets** — Use the `acli-jira` skill (or `acli jira workitem create-bulk --from-csv`) to create Stories/Tasks as AFK vertical slices under the Epic, each with acceptance criteria.
+
+These issues are the source of truth. The implementation plan and `afk.sh` arguments reference them by key.
 
 #### 2b. CLAUDE.md (if missing or lacks build/test commands)
 
@@ -86,7 +91,18 @@ Do not implement these — advise and let the user decide scope. Once they exist
 
 #### 2e. Implementation Plan (if missing)
 
-Generate `IMPLEMENTATION_PLAN.md` via gap analysis:
+Ask the user how they track tasks for this project:
+
+> **How do you manage your implementation plan?**
+> - **GitHub Issues** — tasks live as open issues (already set up in step 2a)
+> - **Jira** — tasks live in a Jira board
+> - **IMPLEMENTATION_PLAN.md** — a local markdown file in the repo
+
+**If GitHub Issues:** No file needed. The plan is composed on-the-fly from open issues at loop start. Skip to Step 3.
+
+**If Jira:** No file needed. Ask the user for their Jira project key and verify they have `acli` authenticated (invoke the `acli-jira` skill if they need help with setup or ticket creation). The plan will be fetched via `acli` at loop start time. Skip to Step 3.
+
+**If IMPLEMENTATION_PLAN.md (or no external tracker):** Generate the file via gap analysis:
 1. Fetch open AFK implementation tickets: `gh issue list --state open`
 2. Read the directory structure to identify what is already built
 3. Produce a prioritised task list where each item references the GitHub issue number
@@ -95,11 +111,17 @@ Present for user review before writing.
 
 ### Step 3 — Run the loop
 
-Once all pillars are green, show the user how to run the loop. First fetch the plan+PRD content:
+Once all pillars are green, show the user how to run the loop. First compose the plan+PRD content based on their tracker:
 
 ```bash
-# Get PRD and plan from GitHub issues
-plan=$(gh issue view <prd-issue-number> && gh issue list --state open)
+# GitHub Issues
+plan=$(gh issue view <prd-issue-number>; echo "---"; gh issue list --state open)
+
+# Jira (uses acli — run `acli jira auth login` first if not already authenticated)
+plan=$(acli jira workitem search --jql "project = <PROJECT-KEY> AND status in ('To Do', 'In Progress')")
+
+# IMPLEMENTATION_PLAN.md
+plan=$(cat IMPLEMENTATION_PLAN.md)
 
 # Run the AFK loop (N iterations)
 bash ralph/afk.sh "$plan" 20

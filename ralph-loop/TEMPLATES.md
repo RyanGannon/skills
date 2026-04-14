@@ -46,6 +46,12 @@ When working on a task tied to a GitHub issue:
 - Keep the acceptance criteria on the issue up-to-date as your understanding evolves
 - When the feature is complete and all checks pass, close the issue with `gh issue close <number>`
 
+# JIRA (if using Jira)
+
+When working on a task tied to a Jira ticket:
+
+- When the feature is complete and all checks pass, transition the ticket to Done with `acli jira workitem transition -k <KEY> -s Done -y`
+
 # FINAL RULES
 
 ONLY WORK ON A SINGLE TASK.
@@ -157,6 +163,8 @@ Things the agent has learned to avoid (add here as issues are observed):
 
 ## IMPLEMENTATION_PLAN.md
 
+**Only needed if you are not using GitHub Issues or Jira as your plan tracker.** If you are using either of those, the plan is composed on-the-fly from open tickets and this file is redundant.
+
 Generated from open GitHub issues. Each item references the issue number it comes from.
 
 ```markdown
@@ -183,11 +191,17 @@ Generated from open GitHub issues on [DATE]. Regenerate freely when stale.
 
 ## Running the Loop
 
-Once all files are in place, get the plan+PRD content and run:
+Once all files are in place, compose the plan+PRD content from your tracker and run:
 
 ```bash
-# Fetch PRD and open issues as the plan content
+# GitHub Issues
 plan=$(gh issue view <prd-issue-number>; echo "---"; gh issue list --state open)
+
+# Jira (uses acli — run `acli jira auth login` first if not already authenticated)
+plan=$(acli jira workitem search --jql "project = <PROJECT-KEY> AND status in ('To Do', 'In Progress')")
+
+# IMPLEMENTATION_PLAN.md
+plan=$(cat IMPLEMENTATION_PLAN.md)
 
 # Run AFK loop for up to 20 iterations
 bash ralph/afk.sh "$plan" 20

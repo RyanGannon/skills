@@ -99,21 +99,34 @@ Each pillar scores 0–2 points. A project is **loop-ready** at 8–10. Below 6 
 
 ## Pillar 5: Implementation Plan
 
+The plan can live in GitHub Issues, Jira, or a local `IMPLEMENTATION_PLAN.md` file. First establish which the user is using, then score accordingly.
+
 **What to check:**
+
+*GitHub Issues (preferred when Specifications pillar is also GitHub Issues):*
+- Open AFK implementation tickets exist with acceptance criteria and priority order
+- No separate file needed — the plan is composed on-the-fly from open issues
+
+*Jira:*
+- Confirm the user has a Jira project key and open tickets covering the work
+- Confirm `acli` is installed and authenticated (`acli jira auth login`)
+- No separate file needed — the plan is fetched via `acli jira workitem search` at loop start time
+
+*IMPLEMENTATION_PLAN.md:*
 - Read `IMPLEMENTATION_PLAN.md` at the repo root
 - Confirm each item references a GitHub issue number
 - Check that completed items are marked (strikethrough, checkbox, or status field)
 - Verify the plan is not stale (compare against open GitHub issues)
 
-**Score 2:** Plan exists, references issue numbers, is recently updated, and has a clear priority order.
+**Score 2:** Plan source is clearly established (GitHub Issues, Jira, or IMPLEMENTATION_PLAN.md), is up-to-date, and has a clear priority order. If a file, it references issue numbers.
 
-**Score 1:** Plan exists but lacks issue references, has no priority order, or is clearly stale (references issues that are closed or missing items for open issues).
+**Score 1:** A plan source exists but is incomplete — e.g. a file with no issue references, Jira tickets with no priority order, or GitHub Issues that exist but were never reviewed against current state.
 
-**Score 0:** No `IMPLEMENTATION_PLAN.md`.
+**Score 0:** No plan anywhere — no file, no tickets, no tracker configured.
 
 **Red flags:**
-- Plan describes implementation steps rather than outcomes (makes it harder for Ralph to know when done)
-- No issue number references (Ralph cannot cross-check against specs)
+- Plan describes implementation steps rather than outcomes (agent cannot know when done)
+- IMPLEMENTATION_PLAN.md in use alongside GitHub Issues or Jira with no clear reason — likely redundant and will drift out of sync
 - Plan not updated after loop iterations (defeats the purpose of the `Update plan` step in `ralph/prompt.md`)
 
 ---
