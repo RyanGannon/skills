@@ -16,8 +16,9 @@ model: haiku
 ## Issue number detection
 
 Check for an issue number in this order:
-1. Current branch name — extract from patterns like `123-feature-name` or `feature/123-foo`
-2. Ask the user if no issue number is found and none is provided
+1. Current branch name — extract from Jira work item keys patterns like `WEB-123-feature-name` or `feature/WEB-123-foo`
+2. Current branch name — extract from patterns like `123-feature-name` or `feature/123-foo`
+3. Ask the user if no issue number is found and none is provided
 
 Prepend the issue number to the description: `feat: #42 add login page`
 
