@@ -26,12 +26,14 @@ This keeps token usage efficient. If `acli` can create a Jira ticket, it does â€
 ## Installation
 
 ```bash
-git clone https://github.com/RyanGannon/skills
-cd skills
-bash install.sh
+pnpm dlx skills@latest add RyanGannon/skills
 ```
 
-`install.sh` symlinks each skill directory into `~/.claude/skills/`, making them available as `/skill-name` in Claude Code.
+To update:
+
+```bash
+pnpm dlx skills@latest update
+```
 
 ## How skills are built
 
