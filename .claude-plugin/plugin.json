@@ -1,0 +1,13 @@
+{
+  "name": "ryangannon-skills",
+  "skills": [
+    "./acli-jira",
+    "./act-workflows",
+    "./commit",
+    "./fix-github-workflow",
+    "./gabo-workflows",
+    "./prd-to-issues",
+    "./ralph-loop",
+    "./write-a-prd"
+  ]
+}
