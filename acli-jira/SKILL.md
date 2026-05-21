@@ -1,6 +1,11 @@
 ---
 name: acli-jira
-description: Manage Jira work items using the official Atlassian CLI (acli): create, bulk-create, edit, transition, view, search, assign, comment, and handle custom fields. Use when the user wants to create Jira issues/stories/tasks/bugs, edit or transition Jira tickets, run JQL queries, bulk-update work items, or use acli to automate Jira workflows. Also triggers on: "jira cli", "acli workitem", "transition to done", "create jira issue from CLI".
+description: >
+  Manage Jira work items using the official Atlassian CLI (acli) — create,
+  bulk-create, edit, transition, view, search, assign, comment, and handle
+  custom fields. Use when the user wants to create Jira issues/stories/tasks/bugs,
+  edit or transition Jira tickets, run JQL queries, bulk-update work items, or
+  use acli to automate Jira workflows.
 ---
 
 # acli-jira
