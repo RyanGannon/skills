@@ -14,7 +14,6 @@ This keeps token usage efficient. If `acli` can create a Jira ticket, it does â€
 
 | Skill | Wraps | What AI adds |
 |---|---|---|
-| [acli-jira](acli-jira/SKILL.md) | `acli` (Atlassian CLI) | JQL construction, custom field shapes, workflow sequencing, gotcha avoidance |
 | [act-workflows](act-workflows/SKILL.md) | `act` | Parallel job execution, failure diagnosis, and fixes for common act compatibility issues |
 | [commit](commit/SKILL.md) | `git` | Conventional commit formatting, issue number detection, logical change splitting |
 | [fix-github-workflow](fix-github-workflow/SKILL.md) | `gh` + `act` | CI failure diagnosis, fix application, local validation loop, watching the outcome |

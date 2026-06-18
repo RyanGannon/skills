@@ -1,7 +1,6 @@
 {
   "name": "ryangannon-skills",
   "skills": [
-    "./acli-jira",
     "./act-workflows",
     "./commit",
     "./fix-github-workflow",
