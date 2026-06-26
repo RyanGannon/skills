@@ -18,9 +18,7 @@ This keeps token usage efficient. If `acli` can create a Jira ticket, it does â€
 | [commit](commit/SKILL.md) | `git` | Conventional commit formatting, issue number detection, logical change splitting |
 | [fix-github-workflow](fix-github-workflow/SKILL.md) | `gh` + `act` | CI failure diagnosis, fix application, local validation loop, watching the outcome |
 | [gabo-workflows](gabo-workflows/SKILL.md) | `gabo` + `act` | Workflow type selection, generation orchestration, then hands off to act-workflows for testing |
-| [prd-to-issues](prd-to-issues/SKILL.md) | `gh` | Slices a PRD into independently-grabbable AFK vertical slices as GitHub issues |
 | [ralph-loop](ralph-loop/SKILL.md) | `claude` + Docker sandboxes | Assesses Ralph conformance, guides setup across all five pillars, enforces the principles |
-| [write-a-prd](write-a-prd/SKILL.md) | `gh` | Interviews the user, explores the codebase, writes and submits a structured PRD as a GitHub issue |
 
 ## Installation
 
