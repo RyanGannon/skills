@@ -20,12 +20,15 @@ Check for an issue number in this order:
 2. Current branch name — extract from patterns like `123-feature-name` or `feature/123-foo`
 3. Ask the user if no issue number is found and none is provided
 
-Prepend the issue number to the description: `feat: #42 add login page`
+Prepend the issue reference to the description:
+
+- **Jira work item keys** (e.g. `WEB-2630`) — use the **bare key, no `#`**: `chore: WEB-2630 upgrade x`. A `#` is wrong for Jira keys; they are not GitHub issue numbers.
+- **Numeric GitHub issues** — prefix with `#`: `feat: #42 add login page`.
 
 ## Conventional commit format
 
 ```
-<type>(<scope>): #<issue> <description>
+<type>(<scope>): <issue-ref> <description>   # <issue-ref> = bare Jira key (WEB-123) or #<n> for GitHub
 
 [optional body]
 
