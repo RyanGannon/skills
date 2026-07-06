@@ -2,6 +2,7 @@
   "name": "ryangannon-skills",
   "skills": [
     "./act-workflows",
+    "./audit-memories-to-skills",
     "./commit",
     "./fix-github-workflow",
     "./gabo-workflows",

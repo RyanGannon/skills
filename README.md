@@ -15,6 +15,7 @@ This keeps token usage efficient. If `acli` can create a Jira ticket, it does â€
 | Skill | Wraps | What AI adds |
 |---|---|---|
 | [act-workflows](act-workflows/SKILL.md) | `act` | Parallel job execution, failure diagnosis, and fixes for common act compatibility issues |
+| [audit-memories-to-skills](audit-memories-to-skills/SKILL.md) | `~/.claude` memory & skill files | Classifies memories as state-vs-procedure, promotes the reusable ones into skills, retires duplicates, and repairs indexes and wikilinks |
 | [commit](commit/SKILL.md) | `git` | Conventional commit formatting, issue number detection, logical change splitting |
 | [fix-github-workflow](fix-github-workflow/SKILL.md) | `gh` + `act` | CI failure diagnosis, fix application, local validation loop, watching the outcome |
 | [gabo-workflows](gabo-workflows/SKILL.md) | `gabo` + `act` | Workflow type selection, generation orchestration, then hands off to act-workflows for testing |
