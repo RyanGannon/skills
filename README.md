@@ -19,6 +19,7 @@ This keeps token usage efficient. If `acli` can create a Jira ticket, it does â€
 | [commit](commit/SKILL.md) | `git` | Conventional commit formatting, issue number detection, logical change splitting |
 | [fix-github-workflow](fix-github-workflow/SKILL.md) | `gh` + `act` | CI failure diagnosis, fix application, local validation loop, watching the outcome |
 | [gabo-workflows](gabo-workflows/SKILL.md) | `gabo` + `act` | Workflow type selection, generation orchestration, then hands off to act-workflows for testing |
+| [mermaid-to-image](mermaid-to-image/SKILL.md) | `mmdc` (mermaid-cli) | Chrome discovery in confined environments, theme choice for the target, visual verification against the surrounding prose, Confluence storage-format embedding |
 | [ralph-loop](ralph-loop/SKILL.md) | `claude` + Docker sandboxes | Assesses Ralph conformance, guides setup across all five pillars, enforces the principles |
 
 ## Installation
