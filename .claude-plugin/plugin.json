@@ -6,6 +6,7 @@
     "./commit",
     "./fix-github-workflow",
     "./gabo-workflows",
+    "./mermaid-to-image",
     "./ralph-loop"
   ]
 }
