@@ -7,6 +7,8 @@
     "./fix-github-workflow",
     "./gabo-workflows",
     "./mermaid-to-image",
-    "./ralph-loop"
+    "./ralph-loop",
+    "./scanned-ttrpg-pdf-to-markdown",
+    "./transcript-refinement"
   ]
 }

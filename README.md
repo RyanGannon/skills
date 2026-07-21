@@ -21,6 +21,8 @@ This keeps token usage efficient. If `acli` can create a Jira ticket, it does â€
 | [gabo-workflows](gabo-workflows/SKILL.md) | `gabo` + `act` | Workflow type selection, generation orchestration, then hands off to act-workflows for testing |
 | [mermaid-to-image](mermaid-to-image/SKILL.md) | `mmdc` (mermaid-cli) | Chrome discovery in confined environments, theme choice for the target, visual verification against the surrounding prose, Confluence storage-format embedding |
 | [ralph-loop](ralph-loop/SKILL.md) | `claude` + Docker sandboxes | Assesses Ralph conformance, guides setup across all five pillars, enforces the principles |
+| [scanned-ttrpg-pdf-to-markdown](scanned-ttrpg-pdf-to-markdown/SKILL.md) | `tesseract` + `pdftoppm` | Batches OCR to stay under runtime limits, then restructures dense two-column prose into scannable Markdown with headers, lists, and tables |
+| [transcript-refinement](transcript-refinement/SKILL.md) | â€” | Identifies topic shifts and speaker voice, then rewrites raw auto-generated transcripts into polished Markdown while preserving that voice |
 
 ## Installation
 
