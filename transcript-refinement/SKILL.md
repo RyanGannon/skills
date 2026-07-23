@@ -1,6 +1,6 @@
 ---
 name: transcript-refinement
-description: Refine raw auto-generated transcripts (from YouTube, podcasts, meetings, talks, interviews) into polished, readable Markdown documents. Use this skill whenever the user uploads or pastes a raw transcript and wants it cleaned up, edited, or turned into a readable document. Trigger on phrases like "clean up this transcript", "refine this transcript", "polish this transcript", "edit this transcript", "make this readable", or any mention of a raw/auto-generated transcript paired with a request to improve it. Also trigger when the user uploads a .txt, .srt, .vtt, or .md file that looks like a speech-to-text transcript. Even if the user just says "here's a transcript" with no other instructions, use this skill.
+description: Refine raw auto-generated transcripts (from YouTube, podcasts, meetings, talks, interviews) into polished, readable Markdown documents, converted to British English by default. Use this skill whenever the user uploads or pastes a raw transcript and wants it cleaned up, edited, or turned into a readable document. Trigger on phrases like "clean up this transcript", "refine this transcript", "polish this transcript", "edit this transcript", "make this readable", or any mention of a raw/auto-generated transcript paired with a request to improve it. Also trigger when the user uploads a .txt, .srt, .vtt, or .md file that looks like a speech-to-text transcript. Even if the user just says "here's a transcript" with no other instructions, use this skill.
 ---
 
 # Transcript Refinement
@@ -41,9 +41,9 @@ This is the most important rule. The output should sound like the speaker wrote 
 - Format any lists the speaker rattled off into numbered or bulleted lists for clarity.
 - Use em dashes and line breaks to mirror the speaker's natural pauses and cadence.
 
-### Use British English throughout
+### Use British English throughout (default)
 
-Always output in British English, regardless of whether the source transcript uses American English.
+By default, output in British English, regardless of whether the source transcript uses American English. If the user asks for American English, or asks you to preserve the transcript's original spelling variant, skip this section entirely and leave spelling/vocabulary as spoken.
 
 - **Spelling**: Use British spellings throughout. Common conversions: *-ize* → *-ise* (realise, organise, recognise), *-or* → *-our* (colour, favour, behaviour), *-er* → *-re* (centre, theatre, fibre), *-ense* → *-ence* (defence, licence), *-og* → *-ogue* (catalogue, dialogue), *program* → *programme* (except in computing contexts), *check* → *cheque* (financial), *fulfill* → *fulfil*, *skillful* → *skilful*, *traveling* → *travelling*, *canceled* → *cancelled*.
 - **Vocabulary**: Convert common Americanisms where a clear British equivalent exists. For example: *gotten* → *got*, *math* → *maths*, *vacation* → *holiday*, *apartment* → *flat* (only if clearly residential), *truck* → *lorry* (only when clearly a large goods vehicle), *elevator* → *lift*. Use judgement — if the American term is the speaker's natural voice or is an industry term (e.g., "math" in an academic context), prefer preserving voice over converting.
@@ -68,7 +68,10 @@ Produce a single Markdown file with:
 - Clean paragraphs, lists, and emphasis as described above
 - No front matter, metadata, or editorial notes
 
-Save the output as a `.md` file to `/mnt/user-data/outputs/` with a kebab-case filename derived from the title (e.g., `why-great-products-need-great-stories.md`).
+Save the output as a `.md` file with a kebab-case filename derived from the title (e.g., `why-great-products-need-great-stories.md`).
+
+- If `/mnt/user-data/outputs/` exists (claude.ai's sandboxed file environment), save there.
+- Otherwise (e.g. running in Claude Code CLI against a local repo), save to the current working directory, or ask the user where they'd like the file if that's ambiguous.
 
 ## Handling different transcript formats
 
@@ -86,4 +89,4 @@ Before saving the final file, scan your output for:
 3. Sections that lost the speaker's voice and sound too "written"
 4. Headers that are too generic (e.g., "Introduction" when something more specific fits)
 5. Bold text that's overused or applied to unremarkable statements
-6. Any American spellings or vocabulary that slipped through (e.g., *-ize*, *-or* endings, *gotten*, *math*, *vacation*)
+6. If converting to British English: any American spellings or vocabulary that slipped through (e.g., *-ize*, *-or* endings, *gotten*, *math*, *vacation*)
