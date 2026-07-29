@@ -15,11 +15,17 @@ If there are no more tasks to complete, output <promise>NO MORE TASKS</promise>.
 
 # RESUMPTION
 
-First, run `git status` and check the current branch. If it's not the main branch and has uncommitted changes, that's WIP from an iteration that got interrupted mid-task (e.g. a `claude` failure or usage-limit hit) — continue that work instead of picking a new task or discarding it.
+First, run `git status` and check the current branch. If it's not the main branch and has uncommitted changes, or has commits not yet pushed/PR'd, that's WIP from an iteration that got interrupted mid-task (e.g. a `claude` failure or usage-limit hit) — continue that work (push, open the PR, etc.) instead of picking a new task or discarding it.
 
-This matters because resumability otherwise assumes all state lives in the injected commits — but an interruption mid-iteration leaves *uncommitted* work that the next fresh iteration has no other way to discover.
+This matters because resumability otherwise assumes all state lives in the injected commits — but an interruption mid-iteration can leave *uncommitted* work, or a commit made but never pushed/PR'd, that the next fresh iteration has no other way to discover.
 
 Otherwise, proceed to task selection below.
+
+# STAY UNATTENDED
+
+This loop runs via `claude --print` with no one watching in real time — output is only read later, if at all. Never stop mid-iteration to ask a question or wait on a permission/approval prompt: nobody is there to answer it, so the loop just hangs until a human happens to check the transcript. If you find yourself about to ask something, that means the decision actually needed to be made *before* this iteration started — resolve what you can from the task's own spec, `CLAUDE.md`, and past commits, note any genuinely open question as a Sign or a comment on the task, and either proceed on the best-supported interpretation or close out the iteration cleanly (commit WIP, leave the task claimed, explain what's blocking) rather than stalling on a question.
+
+This includes sandbox/permission rejections. Commands outside the configured allow-list, or requiring elevated access (e.g. network egress), will be rejected in this non-interactive mode with no way to approve them live. Before treating that as a blocker to ask about, check whether the current task's own acceptance criteria explicitly call for the gated action — if so, the human already pre-authorized it by writing that acceptance criterion and marking the task ready for the loop to pick up, and you should proceed rather than stop. Do not extend this reasoning beyond what the acceptance criteria actually say, and never use it to route around a rejection on an action the task doesn't call for.
 
 # EXPLORATION
 
