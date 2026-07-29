@@ -58,7 +58,7 @@ Each pillar scores 0–2 points. A project is **loop-ready** at 8–10. Below 6 
 **What to check:**
 - Check `ralph/afk.sh`, `ralph/once.sh`, `ralph/prompt.md` all exist
 - Read `ralph/prompt.md` and verify structure: INPUTS, RESUMPTION (uncommitted-WIP *and* unpushed/no-PR check), STAY UNATTENDED, EXPLORATION, IMPLEMENTATION, FEEDBACK LOOPS, COMMIT, FINAL RULES sections
-- Read `ralph/afk.sh` and verify: injects previous 5 commits, passes plan+PRD as argument (or composes it internally for a fixed single-tracker setup), runs unattended (`--print`, with either `.claude/settings.json` fine-grained permissions, `sbx run claude .` Docker sandbox, or `--dangerously-skip-permissions` as fallback), checks for `NO MORE TASKS` termination, and stops cleanly (rather than crashing or looping blind) if the `claude` invocation itself fails
+- Read `ralph/afk.sh` and verify: injects previous 5 commits, passes plan+PRD as argument (or composes it internally for a fixed single-tracker setup), runs unattended (`--print`, with either `.claude/settings.json` fine-grained permissions, `sbx run claude .` Docker sandbox, or `--dangerously-skip-permissions` as fallback), checks for `NO MORE TASKS` termination, and stops cleanly (via `${PIPESTATUS[0]}`, not the pipeline's aggregate exit code, rather than crashing or looping blind) if the `claude` invocation itself fails
 - Verify `ralph/prompt.md` includes `<promise>NO MORE TASKS</promise>` instruction
 - Verify `ralph/prompt.md` includes `ONLY WORK ON A SINGLE TASK`
 - Verify `ralph/prompt.md` includes a RESUMPTION check (`git status`/branch for uncommitted WIP *and* unpushed/no-PR commits) before task selection — otherwise an iteration interrupted mid-task leaves work a fresh iteration has no way to discover, since only committed state is injected
@@ -83,6 +83,7 @@ Each pillar scores 0–2 points. A project is **loop-ready** at 8–10. Below 6 
 - `prompt.md` has no STAY UNATTENDED section — the agent will stop mid-iteration to ask a question on a sandbox/permission rejection instead of checking whether the task's own acceptance criteria already authorize the gated action, and the loop hangs with no one to answer
 - `afk.sh`/`once.sh` operate directly in the primary checkout with no worktree isolation, while also being run backgrounded — a concurrent human `git checkout`/commit in the same directory is a real collision risk
 - No iteration limit in `afk.sh` (infinite loop with no escape)
+- Backgrounded run logs redirected to an ephemeral session-scoped temp/scratchpad directory instead of a durable path — unreadable after the fact if the environment resets it
 - FEEDBACK LOOPS section in `prompt.md` contains placeholder commands not matching the actual project
 
 ---
@@ -153,6 +154,8 @@ The plan can live in GitHub Issues, Jira, or a local `IMPLEMENTATION_PLAN.md` fi
 | Plan drifts from specs | Loop ran too long without review | Regenerate plan from current open issues |
 | Agent marks tasks done prematurely | Acceptance criteria too vague | Tighten the GitHub issue acceptance criteria |
 | Sandbox can't find build tools | Tools not in Docker image | Add install step to `ralph/prompt.md` or use a custom sandbox image |
+| Bash calls denied with no one to approve them | A Bash-level `PreToolUse` hook (e.g. a command-rewriting proxy) treats compound `&&`-chained commands as needing separate approval, which can't be satisfied in headless `--print` mode | Keep the `.claude/settings.json` allow-list scoped to the exact single commands the loop runs; avoid `&&`-chaining in `ralph/prompt.md` guidance where practical |
+| Loop "completes" iterations doing nothing after a crash/usage-limit hit | `afk.sh` isn't checking `claude`'s real exit code (see Pillar 3) | Add the `${PIPESTATUS[0]}` check from the `afk.sh` template |
 | Fresh iteration redoes or ignores prior WIP after an interruption | `prompt.md` has no uncommitted-WIP check; only committed state is injected | Add the RESUMPTION section from the `prompt.md` template |
 | A fresh iteration skips a task whose branch already has a committed-but-unpushed/no-PR commit from a prior run | RESUMPTION check only looked for *uncommitted* changes, not unpushed commits, so the WIP was invisible to the next iteration | Extend the RESUMPTION check to also cover unpushed/no-PR commits (see the `prompt.md` template) |
 | Loop's own git operations collide with a human's concurrent work in the same checkout | `afk.sh`/`once.sh` run in the primary checkout instead of a dedicated worktree | Add worktree isolation from the `afk.sh`/`once.sh` templates |
