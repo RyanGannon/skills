@@ -61,13 +61,14 @@ ONLY WORK ON A SINGLE TASK.
 
 ## ralph/afk.sh
 
-The AFK loop script. Injects previous 5 commits and plan+PRD content into every iteration. Exits early when no more tasks remain. Runs fully unattended (`--print --dangerously-skip-permissions`) with no approval prompts and no human present to answer them.
+The AFK loop script. Injects previous 5 commits and plan+PRD content into every iteration. Exits early when no more tasks remain, or when `claude` itself fails — checked via `${PIPESTATUS[0]}`, not the pipeline's aggregate exit status, since `set -o pipefail` alone isn't enough: downstream `jq`/`grep` stages can still exit 0 even when `claude` failed upstream, silently masking the failure. On a `claude` failure the script prints the raw output and stops rather than crashing uninformatively or looping blind; this is what catches a subscription usage-limit hit gracefully — state lives in git commits and GitHub issues, not in the script, so it's always safe to just rerun the script later to resume.
 
-**Isolation depends on how `claude` is authenticated:**
-- **API key** (`ANTHROPIC_API_KEY`) — wrap the invocation in `sbx run claude . --` (Docker Desktop AI Sandboxes) so unattended execution is contained, not running loose on the host. This is the preferred default when available.
-- **Claude subscription login (OAuth)** — `sbx` cannot authenticate this way, so `claude` must run directly on the host with no sandbox boundary. Every write/delete/push/merge it performs is unmediated. Say this explicitly to the user and get their confirmation before wiring it up this way — don't silently drop sandboxing.
+**Unmediated execution — pick one:**
+1. **Fine-grained permissions (preferred)** — no bypass flag at all; rely on a `.claude/settings.json` allow/deny list (template below) plus an accepted workspace trust dialog. Smallest blast radius: unlisted operations are denied, not silently allowed. Works with any auth method.
+2. **Docker sandbox (API-key auth only)** — prepend `sbx run claude . --` in place of `claude` for real isolation. `sbx` cannot authenticate via subscription/OAuth login.
+3. **Blanket bypass (fallback)** — append `--dangerously-skip-permissions`. Works with any auth method but has no isolation and no rule enforcement; every action is unmediated. Get explicit user confirmation before using this as the default, not just when it's the only option available.
 
-Template below is the host-direct (no-`sbx`) form; prepend `sbx run claude . --` in place of `claude` if the user has API-key auth available.
+Template below is the fine-grained-permissions form (option 1); swap in `sbx run claude . --` or add `--dangerously-skip-permissions` per the options above if the user picks differently.
 
 ```bash
 #!/bin/bash
@@ -86,20 +87,33 @@ final_result='select(.type == "result").result // empty'
 
 for ((i=1; i<=$2; i++)); do
   tmpfile=$(mktemp)
-  trap "rm -f $tmpfile" EXIT
+  rawfile=$(mktemp)
+  trap "rm -f $tmpfile $rawfile" EXIT
 
   commits=$(git log -n 5 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No commits found")
   prompt=$(cat ralph/prompt.md)
 
+  set +e
   claude \
     --verbose \
     --print \
-    --dangerously-skip-permissions \
     --output-format stream-json \
-    "Previous commits: $commits Plan and PRD: $1 $prompt" \
+    "Previous commits: $commits Plan and PRD: $1 $prompt" 2>&1 \
+  | tee "$rawfile" \
   | grep --line-buffered '^{' \
   | tee "$tmpfile" \
   | jq --unbuffered -rj "$stream_text"
+  claude_exit=${PIPESTATUS[0]}
+  set -e
+
+  if [ "$claude_exit" -ne 0 ]; then
+    echo ""
+    echo "Ralph stopped after $i iteration(s): claude exited with status $claude_exit."
+    echo "This may be a subscription usage-limit hit — state lives in git commits and GitHub issues, so it's safe to just rerun this script later to resume."
+    echo "Raw output from the failed iteration:"
+    cat "$rawfile"
+    exit 2
+  fi
 
   result=$(jq -r "$final_result" "$tmpfile")
 
@@ -114,9 +128,11 @@ done
 
 ## ralph/once.sh
 
-A single unattended iteration, run directly on the host (no `sbx`/Docker isolation, regardless of auth method) — useful for watching one full iteration end-to-end before committing to a multi-iteration `afk.sh` run. Uses the same `--print --dangerously-skip-permissions` combination as `afk.sh`: `--print` because without it `claude` opens the interactive REPL and hangs waiting on a TTY (this silently breaks the script the moment it's backgrounded or run under `nohup`); `--dangerously-skip-permissions` because otherwise it blocks on approval prompts with nobody there to answer them.
+A single unattended iteration — useful for watching one full iteration end-to-end before committing to a multi-iteration `afk.sh` run, and as a dry run to observe exactly which tools/commands the agent actually needs. That observation is the fastest way to derive an accurate `.claude/settings.json` allow list: afterwards, read the session transcript (`~/.claude/projects/<project-slug>/*.jsonl`, matched by its `Previous commits:` prompt prefix) and look at its `tool_use` entries for the real command patterns used.
 
-Because this always runs on bare host with no sandbox, treat it with the same caution as an unsandboxed `afk.sh` — every git/shell action it takes is unmediated. It is not a safer "supervised" mode just because it's a single iteration; watch its output live rather than backgrounding it blind.
+Same `claude --print` core and the same three unmediated-execution options as `afk.sh` (fine-grained permissions preferred, Docker sandbox for API-key auth, blanket bypass as fallback — see above). `--print` is required, not optional — without it `claude` opens the interactive REPL and hangs waiting on a TTY, silently breaking the script the moment it's backgrounded or run under `nohup`.
+
+If using the blanket-bypass fallback, treat it with real caution: every git/shell action it takes is unmediated. It is not a safer "supervised" mode just because it's a single iteration — watch its output live rather than backgrounding it blind.
 
 ```bash
 #!/bin/bash
@@ -129,9 +145,69 @@ fi
 commits=$(git log -n 5 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No commits found")
 prompt=$(cat ralph/prompt.md)
 
-claude --print --dangerously-skip-permissions \
+claude --print \
   "Previous commits: $commits Plan and PRD: $1 $prompt"
 ```
+
+---
+
+## .claude/settings.json
+
+Only needed for the fine-grained-permissions option (see `ralph/afk.sh` above). Requires the workspace trust dialog to be accepted — otherwise every `permissions.allow` entry is silently ignored and all actions get denied, which looks like a broken loop rather than an untrusted workspace.
+
+Derive the allow list from `ralph/prompt.md`'s FEEDBACK LOOPS/COMMIT/GITHUB ISSUES sections and `CLAUDE.md`'s build/test/lint commands first, then tighten it against a real `ralph/once.sh` dry run's session transcript for anything task-specific those don't predict.
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git push -u origin:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(gh issue close:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr merge:*)",
+      "Bash([TEST COMMAND]:*)",
+      "Bash([LINT COMMAND]:*)",
+      "Bash([TYPECHECK COMMAND]:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fd:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(rm -rf:*)",
+      "Bash(sudo:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh secret:*)",
+      "Bash(gh api:*)",
+      "Read(**/.env)",
+      "Read(~/.ssh/**)",
+      "Read(**/credentials*)"
+    ]
+  }
+}
+```
+
+Substitute `[TEST COMMAND]`, `[LINT COMMAND]`, `[TYPECHECK COMMAND]` with the real command prefixes from `CLAUDE.md` (e.g. `poetry run pytest`, `poetry run ruff check .`, `poetry run mypy`), and swap `main` in the deny list for whatever the project's actual default branch is.
+
+These rules are prefix/glob string matches, not semantic parsing — they reduce but don't guarantee against an unanticipated command shape. If the target branch has no GitHub branch-protection rule (check `gh api repos/<owner>/<repo>/branches/<branch>/protection` — needs GitHub Pro or a public repo), this deny list is the *only* backstop against a direct push to it. Say this plainly to the user rather than presenting it as airtight.
 
 ---
 
@@ -218,3 +294,5 @@ bash ralph/afk.sh "$plan" 20
 # Or run a single supervised iteration
 bash ralph/once.sh "$plan"
 ```
+
+If `afk.sh` stops early (exit code 2 — a `claude` failure, e.g. a usage-limit hit), no special recovery is needed: state lives in git commits and GitHub issues, not in the script, so just rerun the same command later to resume where it left off.

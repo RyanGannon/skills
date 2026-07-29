@@ -59,10 +59,13 @@ if [ -f "ralph/afk.sh" ]; then
   if grep -q "sbx run" ralph/afk.sh; then
     echo "Isolation: Docker sandbox (sbx)"
   elif grep -q "dangerously-skip-permissions" ralph/afk.sh; then
-    echo "Isolation: NONE — host-direct with --dangerously-skip-permissions (expected when claude uses subscription/OAuth login, since sbx requires API-key auth; confirm this was a deliberate choice, not an oversight)"
+    echo "Isolation: NONE — host-direct with --dangerously-skip-permissions (blanket bypass; confirm this was a deliberate fallback choice, not an oversight — a .claude/settings.json allow/deny list is the preferred option and works with any auth method)"
+  elif [ -f ".claude/settings.json" ]; then
+    echo "Isolation: fine-grained permissions via .claude/settings.json (no blanket bypass) — confirm the workspace trust dialog has been accepted (hasTrustDialogAccepted for this project in ~/.claude.json), otherwise its allow/deny rules are silently ignored"
   else
     echo "Isolation: NOT FOUND (check loop command)"
   fi
+  grep -q 'PIPESTATUS' ralph/afk.sh && echo "Claude-failure handling: present (stops cleanly on a failed claude call, e.g. a usage-limit hit)" || echo "Claude-failure handling: MISSING (a failed claude call mid-loop may crash uninformatively, hang, or go unnoticed)"
 fi
 echo ""
 

@@ -5,7 +5,13 @@ description: Assess a software project's conformance to Ralph Wiggum Loop princi
 
 # Ralph Loop Skill
 
-Guide the user from zero to a working Level 5 Ralph Wiggum loop, or assess an existing project against Ralph principles. Each iteration runs Claude Code unattended (`--print --dangerously-skip-permissions`), injecting the previous 5 commits for continuity without a persistent context window. That iteration runs inside an isolated Docker sandbox (`sbx run claude .`) when `claude` is authenticated via API key — the only case where sandboxing is possible. With subscription/OAuth login, `sbx` cannot authenticate, so the loop runs directly on the host with no isolation; always confirm with the user which case applies and make sure they understand the blast-radius difference.
+Guide the user from zero to a working Level 5 Ralph Wiggum loop, or assess an existing project against Ralph principles. Each iteration runs Claude Code unattended (`--print`), injecting the previous 5 commits for continuity without a persistent context window. Unattended execution needs some way to avoid blocking on approval prompts with nobody there to answer them — there are three options, in order of preference:
+
+1. **Fine-grained permission rules** (`.claude/settings.json` allow/deny list, no `--dangerously-skip-permissions`) — works with any auth method, but only takes effect once the workspace has been trusted (accept Claude Code's trust dialog interactively once, or confirm `hasTrustDialogAccepted` is set for the project in `~/.claude.json`). Smallest blast radius: unlisted commands are denied rather than silently allowed.
+2. **Docker sandbox** (`sbx run claude .`) — real filesystem/network isolation, but only usable when `claude` is authenticated via API key; `sbx` cannot use subscription/OAuth login.
+3. **Blanket bypass** (`--dangerously-skip-permissions`) — works with any auth method, no isolation and no rule enforcement at all. Fastest to set up, largest blast radius. Treat as a fallback, not a default.
+
+Always confirm with the user which option applies and make sure they understand the blast-radius difference before wiring up `afk.sh`/`once.sh`.
 
 ## Quick Start
 
@@ -74,8 +80,8 @@ Ask the user:
 Create the `ralph/` directory with three files from [TEMPLATES.md](TEMPLATES.md):
 
 - **`ralph/prompt.md`** — Instructions for the agent each iteration. Crucially includes the feedback loop commands (tests, type checker, linter) and the rule `ONLY WORK ON A SINGLE TASK`. Also includes the `<promise>NO MORE TASKS</promise>` termination instruction.
-- **`ralph/afk.sh`** — The AFK loop. Injects the previous 5 commits and the plan+PRD content into each `claude --print --dangerously-skip-permissions` invocation. Accepts `<plan-and-prd>` and `<iterations>` arguments. Exits early on `NO MORE TASKS`. Ask the user how `claude` is authenticated: API key → wrap in `sbx run claude . --` (Docker Desktop AI Sandboxes) for real isolation; subscription/OAuth login → `sbx` won't authenticate, so it must run directly on the host with no sandbox — tell the user this explicitly, since it means every action is unmediated.
-- **`ralph/once.sh`** — Single unattended iteration via `claude --print --dangerously-skip-permissions`, run directly on the host regardless of auth method (never wrapped in `sbx`). Useful for watching one full iteration before trusting a multi-iteration `afk.sh` run. `--print` is required, not optional — without it `claude` opens the interactive REPL and just hangs the moment the script is backgrounded or has no TTY.
+- **`ralph/afk.sh`** — The AFK loop. Injects the previous 5 commits and the plan+PRD content into each `claude --print` invocation, accepts `<plan-and-prd>` and `<iterations>` arguments, and exits early on `NO MORE TASKS`. Also stops cleanly (distinct exit code, raw output dumped) on any `claude` failure mid-iteration — checked via `${PIPESTATUS[0]}` rather than the pipeline's aggregate exit code, since downstream `jq`/`grep` stages will otherwise mask a failing `claude` call even with `set -o pipefail`. This matters most for a subscription usage-limit hit: state lives in git commits and GitHub issues, not in the script, so stopping and telling the user is safe — they can just rerun the script later to resume. Ask the user which unmediated-execution option applies (see the three options above) and wire the invocation accordingly: no bypass flag, relying on `.claude/settings.json` (preferred); `sbx run claude . --` prefix (API-key + Docker); or `--dangerously-skip-permissions` (fallback, any auth).
+- **`ralph/once.sh`** — Single unattended iteration, same `claude --print` invocation shape as `afk.sh` minus the streaming/failure-handling scaffolding (it's meant to be watched live, not parsed). Useful for watching one full iteration — and as a dry run to observe exactly which tools/commands the agent actually uses, which is the fastest way to derive an accurate `.claude/settings.json` allow list (see Step 3). `--print` is required, not optional — without it `claude` opens the interactive REPL and just hangs the moment the script is backgrounded or has no TTY.
 
 Update `ralph/prompt.md`'s FEEDBACK LOOPS section with the actual build/test commands from `CLAUDE.md`.
 
@@ -135,13 +141,20 @@ bash ralph/once.sh "$plan"
 
 The loop injects previous 5 commits into each iteration so the agent understands what has already been done, without maintaining a persistent context window.
 
-**Prerequisites — depends on how the user authenticates `claude`:**
-- **API key** (`ANTHROPIC_API_KEY`): Docker Desktop with AI Sandboxes enabled, plus the key set in environment or Docker sandbox secrets. `afk.sh` should wrap its invocation in `sbx run claude . --` for real isolation.
-- **Subscription login (OAuth, e.g. `claude login`)**: `sbx` cannot authenticate this way, so there is no sandbox option — both `afk.sh` and `once.sh` run `claude --print --dangerously-skip-permissions` directly on the host. Tell the user this plainly: every git/shell action the loop takes is unmediated, with no approval prompts and no Docker boundary. Get explicit confirmation before wiring the loop up this way.
+**Prerequisites — depends on which unmediated-execution option the user picks (see the three options in the intro):**
+- **Fine-grained permissions (`.claude/settings.json`, preferred)**: works with either API-key or subscription/OAuth auth. Requires the workspace to be trusted — either the user runs `claude` interactively in the project once and accepts the trust dialog, or `hasTrustDialogAccepted` is confirmed set for the project path in `~/.claude.json`. Build the allow/deny list like this:
+  - Start from `ralph/prompt.md`'s FEEDBACK LOOPS/COMMIT/GITHUB ISSUES sections and `CLAUDE.md`'s build/test/lint commands — these predict most of the `git`/`gh`/test-runner patterns up front.
+  - Run `ralph/once.sh` once as a dry run, then inspect its session transcript (`~/.claude/projects/<project-slug>/*.jsonl`, matched by its `Previous commits:` prompt prefix) for the actual `tool_use` calls made — this catches task-specific operations (e.g. a one-off `curl` fetch) that the prompt alone wouldn't predict.
+  - Deny destructive patterns explicitly regardless of what was observed: force pushes, `push origin <protected-branch>`, `git reset --hard`, `rm -rf`, `sudo`, `gh api` (a broad escape hatch around everything else), credential/`.env` file reads.
+  - Flag the limitation plainly to the user: these are prefix/glob string matches, not semantic parsing — they reduce but don't guarantee against an unanticipated command shape. If the repo has no GitHub branch protection on the target branch (check `gh api repos/<owner>/<repo>/branches/<branch>/protection` — needs GitHub Pro or a public repo), this deny list is the *only* backstop against a direct push to it.
+  - See [TEMPLATES.md](TEMPLATES.md) for a starting `.claude/settings.json`.
+- **Docker sandbox (`sbx run claude .`)**: Docker Desktop with AI Sandboxes enabled, plus `ANTHROPIC_API_KEY` set in environment or Docker sandbox secrets. `afk.sh` wraps its invocation in `sbx run claude . --` for real isolation. API-key auth only — `sbx` cannot use subscription/OAuth login.
+- **Blanket bypass (`--dangerously-skip-permissions`)**: works with either auth method, no other prerequisite — which is exactly why it's the fallback, not the default. Tell the user plainly: every git/shell action the loop takes is unmediated, with no approval prompts and no Docker boundary. Get explicit confirmation before wiring the loop up this way.
 
 Key reminders:
 - **Watch the first several iterations.** Do not walk away. This is where you learn what signs are needed. This matters even more without Docker isolation — there is no sandbox boundary catching a bad command.
 - **Signs fix mistakes.** When Ralph goes wrong, add a guardrail to `CLAUDE.md` or `ralph/prompt.md` — do not just re-run.
+- **A stopped loop is not a broken loop.** If `afk.sh` exits early because `claude` itself failed (usage limit, transient error, etc.), the work already committed is safe — just rerun the script later to resume. Don't treat every early stop as a bug to chase.
 - **Plans are disposable.** Delete and regenerate `IMPLEMENTATION_PLAN.md` freely. Stale plans are cheaper to replace than to salvage.
 - **Keep context windows single-purpose.** Discovery sessions and execution loops are separate invocations.
 
