@@ -57,15 +57,17 @@ Each pillar scores 0–2 points. A project is **loop-ready** at 8–10. Below 6 
 
 **What to check:**
 - Check `ralph/afk.sh`, `ralph/once.sh`, `ralph/prompt.md` all exist
-- Read `ralph/prompt.md` and verify structure: INPUTS, EXPLORATION, IMPLEMENTATION, FEEDBACK LOOPS, COMMIT, FINAL RULES sections
-- Read `ralph/afk.sh` and verify: injects previous 5 commits, passes plan+PRD as argument, runs unattended (`--print`, with either `.claude/settings.json` fine-grained permissions, `sbx run claude .` Docker sandbox, or `--dangerously-skip-permissions` as fallback), checks for `NO MORE TASKS` termination, and stops cleanly (rather than crashing or looping blind) if the `claude` invocation itself fails
+- Read `ralph/prompt.md` and verify structure: INPUTS, RESUMPTION (uncommitted-WIP check), EXPLORATION, IMPLEMENTATION, FEEDBACK LOOPS, COMMIT, FINAL RULES sections
+- Read `ralph/afk.sh` and verify: injects previous 5 commits, passes plan+PRD as argument (or composes it internally for a fixed single-tracker setup), runs unattended (`--print`, with either `.claude/settings.json` fine-grained permissions, `sbx run claude .` Docker sandbox, or `--dangerously-skip-permissions` as fallback), checks for `NO MORE TASKS` termination, and stops cleanly (rather than crashing or looping blind) if the `claude` invocation itself fails
 - Verify `ralph/prompt.md` includes `<promise>NO MORE TASKS</promise>` instruction
 - Verify `ralph/prompt.md` includes `ONLY WORK ON A SINGLE TASK`
+- Verify `ralph/prompt.md` includes a RESUMPTION check (`git status`/branch for uncommitted WIP) before task selection — otherwise an iteration interrupted mid-task leaves work a fresh iteration has no way to discover, since only committed state is injected
 - If `.claude/settings.json` is present, confirm the workspace trust dialog has actually been accepted (`hasTrustDialogAccepted` for the project in `~/.claude.json`) — otherwise its `permissions.allow` entries are silently ignored
+- Check whether `afk.sh`/`once.sh` run from a dedicated `git worktree` (a sibling directory reused across invocations) rather than the primary checkout — relevant once either script gets backgrounded rather than watched directly
 
-**Score 2:** All three files present. `afk.sh` injects commits and runs unattended via one of: `.claude/settings.json` fine-grained permissions (preferred — requires the workspace to be trusted), `sbx run claude .` Docker sandbox (API-key auth only), or `--dangerously-skip-permissions` (fallback, any auth). It checks `${PIPESTATUS[0]}` (not just the pipeline's overall exit status) after the `claude` call and stops cleanly with diagnostic output on failure rather than crashing blind or retrying pointlessly. `prompt.md` has correct structure including termination instruction.
+**Score 2:** All three files present. `afk.sh` injects commits and runs unattended via one of: `.claude/settings.json` fine-grained permissions (preferred — requires the workspace to be trusted), `sbx run claude .` Docker sandbox (API-key auth only), or `--dangerously-skip-permissions` (fallback, any auth). It checks `${PIPESTATUS[0]}` (not just the pipeline's overall exit status) after the `claude` call and stops cleanly with diagnostic output on failure rather than crashing blind or retrying pointlessly. `prompt.md` has correct structure including termination instruction and the RESUMPTION check.
 
-**Score 1:** Some files present but missing elements (e.g. `prompt.md` exists but `afk.sh` is absent, `afk.sh` doesn't inject commits, or it runs unattended but has no handling for a failed `claude` call).
+**Score 1:** Some files present but missing elements (e.g. `prompt.md` exists but `afk.sh` is absent, `afk.sh` doesn't inject commits, it runs unattended but has no handling for a failed `claude` call, or `prompt.md` has no RESUMPTION check).
 
 **Score 0:** `ralph/` directory does not exist.
 
@@ -76,6 +78,8 @@ Each pillar scores 0–2 points. A project is **loop-ready** at 8–10. Below 6 
 - `.claude/settings.json` present but the workspace trust dialog hasn't been accepted — looks like the loop is broken (everything gets denied) when it's actually a trust-state issue
 - `afk.sh` trusts the pipeline's aggregate exit status instead of `${PIPESTATUS[0]}` — with `set -o pipefail`, a failing `claude` call can still return overall success if the downstream `jq`/`grep` stages succeed on empty or partial input, silently swallowing the failure
 - No handling at all for a `claude` invocation failure (e.g. a subscription usage-limit hit) — the loop should stop cleanly and note that state is safe to resume from, not crash uninformatively or hang
+- `prompt.md` has no check for uncommitted WIP from an interrupted prior iteration before picking a new task — the agent will either ignore half-finished work or start a second task on top of it
+- `afk.sh`/`once.sh` operate directly in the primary checkout with no worktree isolation, while also being run backgrounded — a concurrent human `git checkout`/commit in the same directory is a real collision risk
 - No iteration limit in `afk.sh` (infinite loop with no escape)
 - FEEDBACK LOOPS section in `prompt.md` contains placeholder commands not matching the actual project
 
@@ -147,3 +151,5 @@ The plan can live in GitHub Issues, Jira, or a local `IMPLEMENTATION_PLAN.md` fi
 | Plan drifts from specs | Loop ran too long without review | Regenerate plan from current open issues |
 | Agent marks tasks done prematurely | Acceptance criteria too vague | Tighten the GitHub issue acceptance criteria |
 | Sandbox can't find build tools | Tools not in Docker image | Add install step to `ralph/prompt.md` or use a custom sandbox image |
+| Fresh iteration redoes or ignores prior WIP after an interruption | `prompt.md` has no uncommitted-WIP check; only committed state is injected | Add the RESUMPTION section from the `prompt.md` template |
+| Loop's own git operations collide with a human's concurrent work in the same checkout | `afk.sh`/`once.sh` run in the primary checkout instead of a dedicated worktree | Add worktree isolation from the `afk.sh`/`once.sh` templates |

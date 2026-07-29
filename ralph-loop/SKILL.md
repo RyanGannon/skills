@@ -79,11 +79,15 @@ Ask the user:
 
 Create the `ralph/` directory with three files from [TEMPLATES.md](TEMPLATES.md):
 
-- **`ralph/prompt.md`** — Instructions for the agent each iteration. Crucially includes the feedback loop commands (tests, type checker, linter) and the rule `ONLY WORK ON A SINGLE TASK`. Also includes the `<promise>NO MORE TASKS</promise>` termination instruction.
-- **`ralph/afk.sh`** — The AFK loop. Injects the previous 5 commits and the plan+PRD content into each `claude --print` invocation, accepts `<plan-and-prd>` and `<iterations>` arguments, and exits early on `NO MORE TASKS`. Also stops cleanly (distinct exit code, raw output dumped) on any `claude` failure mid-iteration — checked via `${PIPESTATUS[0]}` rather than the pipeline's aggregate exit code, since downstream `jq`/`grep` stages will otherwise mask a failing `claude` call even with `set -o pipefail`. This matters most for a subscription usage-limit hit: state lives in git commits and GitHub issues, not in the script, so stopping and telling the user is safe — they can just rerun the script later to resume. Ask the user which unmediated-execution option applies (see the three options above) and wire the invocation accordingly: no bypass flag, relying on `.claude/settings.json` (preferred); `sbx run claude . --` prefix (API-key + Docker); or `--dangerously-skip-permissions` (fallback, any auth).
-- **`ralph/once.sh`** — Single unattended iteration, same `claude --print` invocation shape as `afk.sh` minus the streaming/failure-handling scaffolding (it's meant to be watched live, not parsed). Useful for watching one full iteration — and as a dry run to observe exactly which tools/commands the agent actually uses, which is the fastest way to derive an accurate `.claude/settings.json` allow list (see Step 3). `--print` is required, not optional — without it `claude` opens the interactive REPL and just hangs the moment the script is backgrounded or has no TTY.
+- **`ralph/prompt.md`** — Instructions for the agent each iteration. Crucially includes the feedback loop commands (tests, type checker, linter) and the rule `ONLY WORK ON A SINGLE TASK`. Also includes the `<promise>NO MORE TASKS</promise>` termination instruction and a RESUMPTION check (see below).
+- **`ralph/afk.sh`** — The AFK loop. Injects the previous 5 commits and the plan+PRD content into each `claude --print` invocation, accepts `<plan-and-prd>` and `<iterations>` arguments, and exits early on `NO MORE TASKS`. Also stops cleanly (distinct exit code, raw output dumped) on any `claude` failure mid-iteration — checked via `${PIPESTATUS[0]}` rather than the pipeline's aggregate exit code, since downstream `jq`/`grep` stages will otherwise mask a failing `claude` call even with `set -o pipefail`. This matters most for a subscription usage-limit hit: state lives in git commits and GitHub issues, not in the script, so stopping and telling the user is safe — they can just rerun the script later to resume. Ask the user which unmediated-execution option applies (see the three options above) and wire the invocation accordingly: no bypass flag, relying on `.claude/settings.json` (preferred); `sbx run claude . --` prefix (API-key + Docker); or `--dangerously-skip-permissions` (fallback, any auth). Runs from a dedicated `git worktree`, not the primary checkout — see "Worktree isolation" in [TEMPLATES.md](TEMPLATES.md).
+- **`ralph/once.sh`** — Single unattended iteration, same `claude --print` invocation shape as `afk.sh` minus the streaming/failure-handling scaffolding (it's meant to be watched live, not parsed). Useful for watching one full iteration — and as a dry run to observe exactly which tools/commands the agent actually uses, which is the fastest way to derive an accurate `.claude/settings.json` allow list (see Step 3). `--print` is required, not optional — without it `claude` opens the interactive REPL and just hangs the moment the script is backgrounded or has no TTY. Same worktree isolation as `afk.sh`.
 
 Update `ralph/prompt.md`'s FEEDBACK LOOPS section with the actual build/test commands from `CLAUDE.md`.
+
+**Resumability has a gap the RESUMPTION section closes:** the loop's continuity model assumes all state lives in the injected commits (only the last 5), but an iteration interrupted mid-task (a `claude` crash, a usage-limit hit) leaves *uncommitted* work that isn't in that injected context. Without an explicit check, a fresh iteration has no way to discover it and may start a second task on top of the WIP, or ignore it entirely. The RESUMPTION section in the `prompt.md` template (checking `git status`/branch before task selection) closes this.
+
+**Worktree isolation** keeps the loop's own git operations off whatever checkout a human is using at the same time — important once `afk.sh`/`once.sh` gets backgrounded rather than watched directly. See [TEMPLATES.md](TEMPLATES.md) for the setup and its one real limitation (local `main` checkout collisions with `do-work`-style branch steps).
 
 #### 2d. Backpressure (if no automated checks found)
 
@@ -157,6 +161,8 @@ Key reminders:
 - **A stopped loop is not a broken loop.** If `afk.sh` exits early because `claude` itself failed (usage limit, transient error, etc.), the work already committed is safe — just rerun the script later to resume. Don't treat every early stop as a bug to chase.
 - **Plans are disposable.** Delete and regenerate `IMPLEMENTATION_PLAN.md` freely. Stale plans are cheaper to replace than to salvage.
 - **Keep context windows single-purpose.** Discovery sessions and execution loops are separate invocations.
+- **Don't share a working tree with the running loop.** If a human wants to poke around the repo while `afk.sh`/`once.sh` is running, do it from a separate checkout or worktree, not the one the loop is branching/committing/merging in.
+- **Redirect backgrounded logs somewhere durable.** Session-scoped scratchpad/temp directories can be cleared between turns; if the log needs to survive to be inspected later, redirect it to a path under the repo or `$HOME` instead.
 
 ## Key Principles (never violate)
 
@@ -166,5 +172,7 @@ Key reminders:
 - Backpressure rejects bad output before humans see it — wired into FEEDBACK LOOPS
 - Signs fix recurring failures; the prompt evolves through observation, not upfront guessing
 - GitHub issues are living documents — acceptance criteria must be kept up-to-date as understanding evolves, and issues must be closed when the feature is complete
+- Resumability via injected commits has a gap: uncommitted WIP from an interrupted iteration isn't in the last-5-commits context, so `ralph/prompt.md` needs an explicit RESUMPTION check for it before picking a new task
+- Prefer running the loop from a dedicated worktree over the primary checkout once it's ever backgrounded — bounds the git-collision risk against concurrent human activity in the same repo
 
 See [ASSESSMENT.md](ASSESSMENT.md) for the scoring rubric and [TEMPLATES.md](TEMPLATES.md) for all file templates.
