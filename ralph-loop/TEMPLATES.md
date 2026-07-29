@@ -13,6 +13,14 @@ You've also been passed a file containing the last few commits. Review these to 
 
 If there are no more tasks to complete, output <promise>NO MORE TASKS</promise>.
 
+# RESUMPTION
+
+First, run `git status` and check the current branch. If it's not the main branch and has uncommitted changes, that's WIP from an iteration that got interrupted mid-task (e.g. a `claude` failure or usage-limit hit) — continue that work instead of picking a new task or discarding it.
+
+This matters because resumability otherwise assumes all state lives in the injected commits — but an interruption mid-iteration leaves *uncommitted* work that the next fresh iteration has no other way to discover.
+
+Otherwise, proceed to task selection below.
+
 # EXPLORATION
 
 Explore the repo. Before making changes, search the codebase — do not assume something is not implemented.
@@ -68,7 +76,11 @@ The AFK loop script. Injects previous 5 commits and plan+PRD content into every 
 2. **Docker sandbox (API-key auth only)** — prepend `sbx run claude . --` in place of `claude` for real isolation. `sbx` cannot authenticate via subscription/OAuth login.
 3. **Blanket bypass (fallback)** — append `--dangerously-skip-permissions`. Works with any auth method but has no isolation and no rule enforcement; every action is unmediated. Get explicit user confirmation before using this as the default, not just when it's the only option available.
 
-Template below is the fine-grained-permissions form (option 1); swap in `sbx run claude . --` or add `--dangerously-skip-permissions` per the options above if the user picks differently.
+**Worktree isolation:** run the loop from a dedicated `git worktree` (a sibling directory, e.g. `<repo>-ralph-worktree`), not the primary checkout. This keeps the loop's own `checkout`/`commit`/`push`/merge operations from colliding with anything a human is doing in the primary checkout at the same time — a real risk if `afk.sh` is backgrounded while someone else runs git commands in the same directory. Create the worktree once (branched off `origin/main`) and reuse it on every subsequent invocation, so an interrupted iteration's uncommitted WIP (see the RESUMPTION section above) is still there next time either script runs. Two things this doesn't fully solve:
+- **Workspace trust is keyed per absolute path.** A freshly created worktree needs its own one-time trust-dialog acceptance — it does not inherit trust from the primary checkout.
+- **`do-work`-style branch steps that check out local `main` before branching** will fail inside the worktree if the primary checkout is *also* on `main` at that moment (git refuses to have the same branch checked out in two worktrees). This fails loudly rather than corrupting anything, but the practical mitigation is: don't park the primary checkout on `main` while the loop is running.
+
+Template below is the fine-grained-permissions form (option 1) with worktree isolation; swap in `sbx run claude . --` or add `--dangerously-skip-permissions` per the options above if the user picks differently.
 
 ```bash
 #!/bin/bash
@@ -78,6 +90,21 @@ if [ -z "$1" ] || [ -z "$2" ]; then
   echo "Usage: $0 <plan-and-prd> <iterations>"
   exit 1
 fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+WORKTREE_DIR="${REPO_ROOT}-ralph-worktree"
+
+if [ ! -d "$WORKTREE_DIR" ]; then
+  echo "Setting up dedicated ralph worktree at $WORKTREE_DIR (keeps the loop's branch/commit/merge operations off this checkout)..."
+  git -C "$REPO_ROOT" fetch origin main
+  git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" -b ralph-work origin/main
+  echo ""
+  echo "NOTE: workspace trust is keyed per absolute path and won't carry over from $REPO_ROOT."
+  echo "If claude hangs or errors on the first iteration below, run 'claude' interactively once in $WORKTREE_DIR to accept the trust dialog, then rerun this script."
+  echo ""
+fi
+
+cd "$WORKTREE_DIR"
 
 # jq filter to extract streaming text from assistant messages
 stream_text='select(.type == "assistant").message.content[]? | select(.type == "text").text // empty | gsub("\n"; "\r\n") | . + "\r\n\n"'
@@ -124,6 +151,21 @@ for ((i=1; i<=$2; i++)); do
 done
 ```
 
+**Optional simplification for GitHub-Issues-only projects:** if the plan tracker is always GitHub Issues with a fixed PRD issue number, bake the `plan=$(...)` composition directly into the script (re-fetched inside the loop, each iteration, so closed issues drop off the list as work progresses) instead of requiring the caller to pass it as an argument every time:
+
+```bash
+# Replace the `$1` plan argument and usage check with:
+if [ -z "$1" ]; then
+  echo "Usage: $0 <iterations>"
+  exit 1
+fi
+# ...then inside the loop, alongside commits/prompt:
+plan=$(gh issue view <prd-issue-number>; echo "---"; gh issue list --state open --limit 50)
+# ...and reference $plan instead of $1 in the claude invocation.
+```
+
+This only fits the single-tracker, fixed-PRD case — keep the argument-based form for projects using Jira or `IMPLEMENTATION_PLAN.md`, or multiple PRDs.
+
 ---
 
 ## ralph/once.sh
@@ -132,7 +174,7 @@ A single unattended iteration — useful for watching one full iteration end-to-
 
 Same `claude --print` core and the same three unmediated-execution options as `afk.sh` (fine-grained permissions preferred, Docker sandbox for API-key auth, blanket bypass as fallback — see above). `--print` is required, not optional — without it `claude` opens the interactive REPL and hangs waiting on a TTY, silently breaking the script the moment it's backgrounded or run under `nohup`.
 
-If using the blanket-bypass fallback, treat it with real caution: every git/shell action it takes is unmediated. It is not a safer "supervised" mode just because it's a single iteration — watch its output live rather than backgrounding it blind.
+If using the blanket-bypass fallback, treat it with real caution: every git/shell action it takes is unmediated. It is not a safer "supervised" mode just because it's a single iteration — watch its output live rather than backgrounding it blind. The same applies to the worktree-isolation reasoning above: even a single iteration should run from the dedicated worktree, not the primary checkout, if a human might be doing anything else in the repo at the same time.
 
 ```bash
 #!/bin/bash
@@ -142,12 +184,29 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+WORKTREE_DIR="${REPO_ROOT}-ralph-worktree"
+
+if [ ! -d "$WORKTREE_DIR" ]; then
+  echo "Setting up dedicated ralph worktree at $WORKTREE_DIR (keeps the loop's branch/commit/merge operations off this checkout)..."
+  git -C "$REPO_ROOT" fetch origin main
+  git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" -b ralph-work origin/main
+  echo ""
+  echo "NOTE: workspace trust is keyed per absolute path and won't carry over from $REPO_ROOT."
+  echo "If claude hangs or errors below, run 'claude' interactively once in $WORKTREE_DIR to accept the trust dialog, then rerun this script."
+  echo ""
+fi
+
+cd "$WORKTREE_DIR"
+
 commits=$(git log -n 5 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No commits found")
 prompt=$(cat ralph/prompt.md)
 
 claude --print \
   "Previous commits: $commits Plan and PRD: $1 $prompt"
 ```
+
+(Drop the `$1`/usage-check block and add the equivalent `plan=$(...)` line before the final `claude` call if using the baked-in-plan simplification described above for `afk.sh`.)
 
 ---
 
