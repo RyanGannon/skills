@@ -56,7 +56,13 @@ if [ -f "ralph/prompt.md" ]; then
 fi
 if [ -f "ralph/afk.sh" ]; then
   grep -q "git log" ralph/afk.sh && echo "Commit injection: present" || echo "Commit injection: MISSING"
-  grep -q "sbx run" ralph/afk.sh && echo "Docker sandbox (sbx): present" || echo "Docker sandbox (sbx): NOT FOUND (check loop command)"
+  if grep -q "sbx run" ralph/afk.sh; then
+    echo "Isolation: Docker sandbox (sbx)"
+  elif grep -q "dangerously-skip-permissions" ralph/afk.sh; then
+    echo "Isolation: NONE — host-direct with --dangerously-skip-permissions (expected when claude uses subscription/OAuth login, since sbx requires API-key auth; confirm this was a deliberate choice, not an oversight)"
+  else
+    echo "Isolation: NOT FOUND (check loop command)"
+  fi
 fi
 echo ""
 

@@ -61,7 +61,13 @@ ONLY WORK ON A SINGLE TASK.
 
 ## ralph/afk.sh
 
-The AFK loop script. Injects previous 5 commits and plan+PRD content into every iteration. Exits early when no more tasks remain.
+The AFK loop script. Injects previous 5 commits and plan+PRD content into every iteration. Exits early when no more tasks remain. Runs fully unattended (`--print --dangerously-skip-permissions`) with no approval prompts and no human present to answer them.
+
+**Isolation depends on how `claude` is authenticated:**
+- **API key** (`ANTHROPIC_API_KEY`) — wrap the invocation in `sbx run claude . --` (Docker Desktop AI Sandboxes) so unattended execution is contained, not running loose on the host. This is the preferred default when available.
+- **Claude subscription login (OAuth)** — `sbx` cannot authenticate this way, so `claude` must run directly on the host with no sandbox boundary. Every write/delete/push/merge it performs is unmediated. Say this explicitly to the user and get their confirmation before wiring it up this way — don't silently drop sandboxing.
+
+Template below is the host-direct (no-`sbx`) form; prepend `sbx run claude . --` in place of `claude` if the user has API-key auth available.
 
 ```bash
 #!/bin/bash
@@ -85,9 +91,10 @@ for ((i=1; i<=$2; i++)); do
   commits=$(git log -n 5 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No commits found")
   prompt=$(cat ralph/prompt.md)
 
-  sbx run claude . -- \
+  claude \
     --verbose \
     --print \
+    --dangerously-skip-permissions \
     --output-format stream-json \
     "Previous commits: $commits Plan and PRD: $1 $prompt" \
   | grep --line-buffered '^{' \
@@ -107,7 +114,9 @@ done
 
 ## ralph/once.sh
 
-Single interactive run, useful for supervised intervention or testing. Uses `--permission-mode acceptEdits` so the user can review each action.
+A single unattended iteration, run directly on the host (no `sbx`/Docker isolation, regardless of auth method) — useful for watching one full iteration end-to-end before committing to a multi-iteration `afk.sh` run. Uses the same `--print --dangerously-skip-permissions` combination as `afk.sh`: `--print` because without it `claude` opens the interactive REPL and hangs waiting on a TTY (this silently breaks the script the moment it's backgrounded or run under `nohup`); `--dangerously-skip-permissions` because otherwise it blocks on approval prompts with nobody there to answer them.
+
+Because this always runs on bare host with no sandbox, treat it with the same caution as an unsandboxed `afk.sh` — every git/shell action it takes is unmediated. It is not a safer "supervised" mode just because it's a single iteration; watch its output live rather than backgrounding it blind.
 
 ```bash
 #!/bin/bash
@@ -120,7 +129,7 @@ fi
 commits=$(git log -n 5 --format="%H%n%ad%n%B---" --date=short 2>/dev/null || echo "No commits found")
 prompt=$(cat ralph/prompt.md)
 
-claude --permission-mode acceptEdits \
+claude --print --dangerously-skip-permissions \
   "Previous commits: $commits Plan and PRD: $1 $prompt"
 ```
 

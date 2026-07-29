@@ -58,18 +58,20 @@ Each pillar scores 0–2 points. A project is **loop-ready** at 8–10. Below 6 
 **What to check:**
 - Check `ralph/afk.sh`, `ralph/once.sh`, `ralph/prompt.md` all exist
 - Read `ralph/prompt.md` and verify structure: INPUTS, EXPLORATION, IMPLEMENTATION, FEEDBACK LOOPS, COMMIT, FINAL RULES sections
-- Read `ralph/afk.sh` and verify: injects previous 5 commits, passes plan+PRD as argument, uses `sbx run claude .`, checks for `NO MORE TASKS` termination
+- Read `ralph/afk.sh` and verify: injects previous 5 commits, passes plan+PRD as argument, runs unattended (`--print --dangerously-skip-permissions`, optionally wrapped in `sbx run claude .`), checks for `NO MORE TASKS` termination
 - Verify `ralph/prompt.md` includes `<promise>NO MORE TASKS</promise>` instruction
 - Verify `ralph/prompt.md` includes `ONLY WORK ON A SINGLE TASK`
 
-**Score 2:** All three files present. `afk.sh` injects commits and uses Docker sandbox. `prompt.md` has correct structure including termination instruction.
+**Score 2:** All three files present. `afk.sh` injects commits and runs unattended — via Docker sandbox (`sbx run claude .`) if the user has API-key auth, or directly on host (`--dangerously-skip-permissions`, no `sbx`) if they're on subscription/OAuth login, since `sbx` cannot authenticate that way. `prompt.md` has correct structure including termination instruction.
 
 **Score 1:** Some files present but missing elements (e.g. `prompt.md` exists but `afk.sh` is absent, or `afk.sh` doesn't inject commits).
 
 **Score 0:** `ralph/` directory does not exist.
 
 **Red flags:**
-- `afk.sh` using `claude --dangerously-skip-permissions` on host instead of Docker sandbox
+- `afk.sh` missing `--print` — without it `claude` opens the interactive REPL and hangs waiting on a TTY, breaking silently the moment it's run unattended
+- `afk.sh` running host-direct with `--dangerously-skip-permissions` when the user *does* have API-key auth available (should be wrapped in `sbx run claude .` for isolation instead)
+- Host-direct `--dangerously-skip-permissions` (subscription/OAuth case) that hasn't been explicitly flagged to the user as unmediated/unsandboxed — this must be a deliberate, confirmed choice, not silently assumed
 - No iteration limit in `afk.sh` (infinite loop with no escape)
 - FEEDBACK LOOPS section in `prompt.md` contains placeholder commands not matching the actual project
 

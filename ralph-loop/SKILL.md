@@ -5,7 +5,7 @@ description: Assess a software project's conformance to Ralph Wiggum Loop princi
 
 # Ralph Loop Skill
 
-Guide the user from zero to a working Level 5 Ralph Wiggum loop, or assess an existing project against Ralph principles. The loop runs Claude Code inside an isolated Docker sandbox, injecting the previous 5 commits into each iteration for continuity without a persistent context window.
+Guide the user from zero to a working Level 5 Ralph Wiggum loop, or assess an existing project against Ralph principles. Each iteration runs Claude Code unattended (`--print --dangerously-skip-permissions`), injecting the previous 5 commits for continuity without a persistent context window. That iteration runs inside an isolated Docker sandbox (`sbx run claude .`) when `claude` is authenticated via API key — the only case where sandboxing is possible. With subscription/OAuth login, `sbx` cannot authenticate, so the loop runs directly on the host with no isolation; always confirm with the user which case applies and make sure they understand the blast-radius difference.
 
 ## Quick Start
 
@@ -74,8 +74,8 @@ Ask the user:
 Create the `ralph/` directory with three files from [TEMPLATES.md](TEMPLATES.md):
 
 - **`ralph/prompt.md`** — Instructions for the agent each iteration. Crucially includes the feedback loop commands (tests, type checker, linter) and the rule `ONLY WORK ON A SINGLE TASK`. Also includes the `<promise>NO MORE TASKS</promise>` termination instruction.
-- **`ralph/afk.sh`** — The AFK loop. Injects the previous 5 commits and the plan+PRD content into each `sbx run claude .` invocation. Accepts `<plan-and-prd>` and `<iterations>` arguments. Exits early on `NO MORE TASKS`.
-- **`ralph/once.sh`** — Single interactive run via `claude --permission-mode acceptEdits`. Useful for testing or intervention.
+- **`ralph/afk.sh`** — The AFK loop. Injects the previous 5 commits and the plan+PRD content into each `claude --print --dangerously-skip-permissions` invocation. Accepts `<plan-and-prd>` and `<iterations>` arguments. Exits early on `NO MORE TASKS`. Ask the user how `claude` is authenticated: API key → wrap in `sbx run claude . --` (Docker Desktop AI Sandboxes) for real isolation; subscription/OAuth login → `sbx` won't authenticate, so it must run directly on the host with no sandbox — tell the user this explicitly, since it means every action is unmediated.
+- **`ralph/once.sh`** — Single unattended iteration via `claude --print --dangerously-skip-permissions`, run directly on the host regardless of auth method (never wrapped in `sbx`). Useful for watching one full iteration before trusting a multi-iteration `afk.sh` run. `--print` is required, not optional — without it `claude` opens the interactive REPL and just hangs the moment the script is backgrounded or has no TTY.
 
 Update `ralph/prompt.md`'s FEEDBACK LOOPS section with the actual build/test commands from `CLAUDE.md`.
 
@@ -127,7 +127,7 @@ plan=$(cat IMPLEMENTATION_PLAN.md)
 bash ralph/afk.sh "$plan" 20
 ```
 
-Or for a supervised single iteration:
+Or to watch a single iteration before trusting the full loop:
 
 ```bash
 bash ralph/once.sh "$plan"
@@ -135,12 +135,12 @@ bash ralph/once.sh "$plan"
 
 The loop injects previous 5 commits into each iteration so the agent understands what has already been done, without maintaining a persistent context window.
 
-**Prerequisites:**
-- Docker Desktop with AI Sandboxes enabled
-- `ANTHROPIC_API_KEY` set in environment or via Docker sandbox secrets
+**Prerequisites — depends on how the user authenticates `claude`:**
+- **API key** (`ANTHROPIC_API_KEY`): Docker Desktop with AI Sandboxes enabled, plus the key set in environment or Docker sandbox secrets. `afk.sh` should wrap its invocation in `sbx run claude . --` for real isolation.
+- **Subscription login (OAuth, e.g. `claude login`)**: `sbx` cannot authenticate this way, so there is no sandbox option — both `afk.sh` and `once.sh` run `claude --print --dangerously-skip-permissions` directly on the host. Tell the user this plainly: every git/shell action the loop takes is unmediated, with no approval prompts and no Docker boundary. Get explicit confirmation before wiring the loop up this way.
 
 Key reminders:
-- **Watch the first several iterations.** Do not walk away. This is where you learn what signs are needed.
+- **Watch the first several iterations.** Do not walk away. This is where you learn what signs are needed. This matters even more without Docker isolation — there is no sandbox boundary catching a bad command.
 - **Signs fix mistakes.** When Ralph goes wrong, add a guardrail to `CLAUDE.md` or `ralph/prompt.md` — do not just re-run.
 - **Plans are disposable.** Delete and regenerate `IMPLEMENTATION_PLAN.md` freely. Stale plans are cheaper to replace than to salvage.
 - **Keep context windows single-purpose.** Discovery sessions and execution loops are separate invocations.
