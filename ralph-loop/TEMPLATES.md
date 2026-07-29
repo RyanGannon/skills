@@ -157,6 +157,8 @@ for ((i=1; i<=$2; i++)); do
 done
 ```
 
+**Why the exit-code check matters:** without capturing `${PIPESTATUS[0]}` (the exit status of `claude`, not of the trailing `jq`/`grep` in the pipeline — plain `$?` would only ever see `jq`'s status), a `claude` crash or a subscription usage-limit hit is silently swallowed: the loop just reads an empty/stale `$tmpfile`, finds no `NO MORE TASKS` marker, and burns through the remaining iteration budget doing nothing. This was validated in production — a real usage-limit hit (`"You've hit your session limit · resets Xpm"`) was correctly caught, printed with the raw diagnostic output, and exited with status 2 instead of masking the failure.
+
 **Optional simplification for GitHub-Issues-only projects:** if the plan tracker is always GitHub Issues with a fixed PRD issue number, bake the `plan=$(...)` composition directly into the script (re-fetched inside the loop, each iteration, so closed issues drop off the list as work progresses) instead of requiring the caller to pass it as an argument every time:
 
 ```bash
